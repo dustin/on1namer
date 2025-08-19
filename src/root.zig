@@ -41,12 +41,17 @@ pub fn parseFile(alloc: std.mem.Allocator, dir: *std.fs.Dir, path: []const u8) !
     var year: u16 = maxYear;
     var names = std.ArrayList([]const u8).init(alloc);
     errdefer names.deinit();
+    var seen = std.StringHashMap(void).init(al); // arena will kill this
+
     var it = photos.iterator();
     while (it.next()) |entry| {
         const o = entry.value_ptr.*.object;
-        const name = try alloc.dupe(u8, o.get("name").?.string);
-        errdefer alloc.free(name);
-        try names.append(name);
+        const name = o.get("name").?.string;
+        if ((try seen.getOrPut(name)).found_existing) continue;
+
+        const dupName = try alloc.dupe(u8, name);
+        errdefer alloc.free(dupName);
+        try names.append(dupName);
         if (o.get("metadata").?.object.get("CaptureDate")) |captured| {
             const y = try std.fmt.parseInt(u16, captured.string[captured.string.len - 4 ..], 10);
             if (y < year) {
@@ -92,5 +97,14 @@ test "parse multi-file" {
     try std.testing.expectEqual(2, someVal.files.len);
     try std.testing.expectEqualStrings("IMG_1648.CR3", someVal.files[0]);
     try std.testing.expectEqualStrings("IMG_1648.DNG", someVal.files[1]);
+    try std.testing.expectEqual(2022, someVal.year);
+}
+
+test "parse with duplicate files" {
+    var dir = std.fs.cwd();
+    var someVal = try parseFile(std.testing.allocator, &dir, "samples/IMG_2173.on1");
+    defer someVal.deinit(std.testing.allocator);
+    try std.testing.expectEqual(1, someVal.files.len);
+    try std.testing.expectEqualStrings("IMG_2173.CR3", someVal.files[0]);
     try std.testing.expectEqual(2022, someVal.year);
 }
