@@ -1,29 +1,40 @@
-//! By convention, main.zig is where your main function lives in the case that
-//! you are building an executable. If you are making a library, the convention
-//! is to delete this file and start with root.zig instead.
+const std = @import("std");
+const on1 = @import("on1namer_lib");
 
-pub fn findFiles(alloc: std.mem.Allocator, dir: *std.fs.Dir) !void {
-    var walker = try dir.walk(alloc);
-    defer walker.deinit();
+fn rename1(alloc: std.mem.Allocator, dir: *std.fs.Dir, base: []const u8, year: u16) !void {
+    const newName = try std.fmt.allocPrint(alloc, "{d}/{s}", .{ year, base });
+    defer alloc.free(newName);
+    std.debug.print("    {s} -> {s}\n", .{ base, newName });
+    try dir.rename(base, newName);
+}
 
-    while (try walker.next()) |entry| {
-        if (entry.kind != .file) {
+fn rename(alloc: std.mem.Allocator, dir: *std.fs.Dir, on1file: []const u8, fi: *on1.FileInfo) !void {
+    const newName = try std.fmt.allocPrint(alloc, "{d}", .{fi.year});
+    defer alloc.free(newName);
+    dir.makeDir(newName) catch {};
+
+    try rename1(alloc, dir, on1file, fi.year);
+    for (fi.files) |file| {
+        try rename1(alloc, dir, file, fi.year);
+    }
+}
+
+fn findFiles(alloc: std.mem.Allocator, dir: *std.fs.Dir) !void {
+    var it = dir.iterate();
+    while (try it.next()) |entry| {
+        if (!std.mem.eql(u8, std.fs.path.extension(entry.name), ".on1")) {
             continue;
         }
-        // src/main.zig:13:28: error: no field or member function named 'ends_with' in '[:0]const u8'
 
-        if (!std.mem.eql(u8, std.fs.path.extension(entry.path), ".on1")) {
-            continue;
-        }
+        std.debug.print("opening file: {s}\n", .{entry.name});
 
-        std.debug.print("opening file: {s}\n", .{entry.path});
-
-        var j = on1.parseFile(alloc, dir, entry.path);
+        var j = on1.parseFile(alloc, dir, entry.name);
         if (j) |*e| {
             defer e.deinit(alloc);
-            std.debug.print("Parsed file: {s}: {s} ({d})\n", .{ entry.path, e.files, e.year });
+            try rename(alloc, dir, entry.name, e);
+            std.debug.print("Parsed file: {s}: {s} ({d})\n", .{ entry.name, e.files, e.year });
         } else |err| {
-            std.debug.print("Failed to parse file: {s}: {}\n", .{ entry.path, err });
+            std.debug.print("Failed to parse file: {s}: {}\n", .{ entry.name, err });
         }
     }
 }
@@ -46,8 +57,3 @@ pub fn main() !void {
         try findFiles(allocator, &dir);
     }
 }
-
-const std = @import("std");
-
-/// This imports the separate module containing `root.zig`. Take a look in `build.zig` for details.
-const on1 = @import("on1namer_lib");

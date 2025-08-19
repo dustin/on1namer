@@ -4,7 +4,7 @@
 const std = @import("std");
 const testing = std.testing;
 
-const FileInfo = struct {
+pub const FileInfo = struct {
     files: []const []const u8,
     year: u16,
 
