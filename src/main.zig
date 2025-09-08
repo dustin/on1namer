@@ -1,11 +1,11 @@
 const std = @import("std");
 const on1 = @import("on1namer_lib");
 
-fn rename1(alloc: std.mem.Allocator, dir: *std.fs.Dir, base: []const u8, year: u16) !void {
+fn rename1(alloc: std.mem.Allocator, _: *std.fs.Dir, base: []const u8, year: u16) !void {
     const newName = try std.fmt.allocPrint(alloc, "{d}/{s}", .{ year, base });
     defer alloc.free(newName);
     std.debug.print("    {s} -> {s}\n", .{ base, newName });
-    try dir.rename(base, newName);
+    // try dir.rename(base, newName);
 }
 
 fn rename(alloc: std.mem.Allocator, dir: *std.fs.Dir, on1file: []const u8, fi: *on1.FileInfo) !void {
@@ -17,6 +17,25 @@ fn rename(alloc: std.mem.Allocator, dir: *std.fs.Dir, on1file: []const u8, fi: *
     for (fi.files) |file| {
         try rename1(alloc, dir, file, fi.year);
     }
+}
+
+fn FormatSlice(comptime fmt: []const u8) type {
+    return struct {
+        things: []const []const u8 = undefined,
+
+        pub fn format(self: @This(), w: *std.Io.Writer) std.Io.Writer.Error!void {
+            try w.writeAll("[");
+            for (self.things, 0..) |s, i| {
+                if (i > 0) try w.writeAll(", ");
+                try w.print(fmt, .{s});
+            }
+            try w.writeAll("]");
+        }
+    };
+}
+
+fn formatSlice(comptime fmt: []const u8, things: anytype) FormatSlice(fmt) {
+    return FormatSlice(fmt){ .things = things };
 }
 
 fn findFiles(alloc: std.mem.Allocator, dir: *std.fs.Dir) !void {
@@ -32,7 +51,8 @@ fn findFiles(alloc: std.mem.Allocator, dir: *std.fs.Dir) !void {
         if (j) |*e| {
             defer e.deinit(alloc);
             try rename(alloc, dir, entry.name, e);
-            std.debug.print("Parsed file: {s}: {s} ({d})\n", .{ entry.name, e.files, e.year });
+            // std.debug.print("{s}", .{entry.name});
+            std.debug.print("Parsed file: {s}: {f} ({d})\n", .{ entry.name, formatSlice("{s}", e.files), e.year });
         } else |err| {
             std.debug.print("Failed to parse file: {s}: {}\n", .{ entry.name, err });
         }

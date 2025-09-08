@@ -29,8 +29,10 @@ pub fn parseFile(alloc: std.mem.Allocator, dir: *std.fs.Dir, path: []const u8) !
 
     const file = try dir.openFile(path, .{});
     defer file.close();
-    const reader = file.reader();
-    var jr = std.json.reader(al, reader);
+    var buf: [1024]u8 = undefined;
+    var reader = file.reader(&buf);
+    const ri = &reader.interface;
+    var jr = std.json.Scanner.Reader.init(al, ri);
     const val = try std.json.parseFromTokenSourceLeaky(std.json.Value, al, &jr, .{});
 
     const photos = val.object.get("photos").?.object;
@@ -39,8 +41,8 @@ pub fn parseFile(alloc: std.mem.Allocator, dir: *std.fs.Dir, path: []const u8) !
     }
 
     var year: u16 = maxYear;
-    var names = std.ArrayList([]const u8).init(alloc);
-    errdefer names.deinit();
+    var names = try std.ArrayList([]const u8).initCapacity(alloc, 2);
+    errdefer names.deinit(alloc);
     var seen = std.StringHashMap(void).init(al); // arena will kill this
 
     var it = photos.iterator();
@@ -51,7 +53,7 @@ pub fn parseFile(alloc: std.mem.Allocator, dir: *std.fs.Dir, path: []const u8) !
 
         const dupName = try alloc.dupe(u8, name);
         errdefer alloc.free(dupName);
-        try names.append(dupName);
+        try names.append(alloc, dupName);
         if (o.get("metadata").?.object.get("CaptureDate")) |captured| {
             const y = try std.fmt.parseInt(u16, captured.string[captured.string.len - 4 ..], 10);
             if (y < year) {
@@ -62,7 +64,7 @@ pub fn parseFile(alloc: std.mem.Allocator, dir: *std.fs.Dir, path: []const u8) !
 
     if (year < maxYear and names.items.len > 0) {
         return FileInfo{
-            .files = try names.toOwnedSlice(),
+            .files = try names.toOwnedSlice(alloc),
             .year = year,
         };
     } else {
