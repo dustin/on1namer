@@ -19,9 +19,9 @@ fn rename(alloc: std.mem.Allocator, dir: *std.fs.Dir, on1file: []const u8, fi: *
     }
 }
 
-fn FormatSlice(comptime fmt: []const u8) type {
+fn FormatSlice(comptime fmt: []const u8, comptime T: type) type {
     return struct {
-        things: []const []const u8 = undefined,
+        things: T = undefined,
 
         pub fn format(self: @This(), w: *std.Io.Writer) std.Io.Writer.Error!void {
             try w.writeAll("[");
@@ -34,8 +34,8 @@ fn FormatSlice(comptime fmt: []const u8) type {
     };
 }
 
-fn formatSlice(comptime fmt: []const u8, things: anytype) FormatSlice(fmt) {
-    return FormatSlice(fmt){ .things = things };
+fn formatSlice(comptime fmt: []const u8, things: anytype) FormatSlice(fmt, @TypeOf(things)) {
+    return FormatSlice(fmt, @TypeOf(things)){ .things = things };
 }
 
 fn findFiles(alloc: std.mem.Allocator, dir: *std.fs.Dir) !void {
