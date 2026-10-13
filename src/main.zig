@@ -60,7 +60,7 @@ fn findFiles(alloc: std.mem.Allocator, dir: *std.fs.Dir) !void {
 }
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa = std.heap.DebugAllocator(.{}){};
     defer {
         _ = gpa.deinit();
     }
